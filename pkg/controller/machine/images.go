@@ -51,28 +51,15 @@ func parse(raw string) (image, bool) {
 	return i, true
 }
 
-func getImages(c *maas.Client) (images []image) {
-	br, err := c.Controller.BootResources()
-	if err != nil {
-		return
-	}
-
-	for _, v := range br {
-		if v.Type() != "Uploaded" {
-			continue
-		}
-		if i, ok := parse(v.Name()); ok {
-			images = append(images, i)
-		}
-	}
-	return
-}
-
-func (i *image) findIn(images []image) bool {
+func (i *image) findIn(images []string) bool {
 	if i.os == "" || i.k8sVersion == "" || i.instanceType == "" {
 		return false
 	}
-	for _, img := range images {
+	for _, raw := range images {
+		img, ok := parse(raw)
+		if !ok {
+			continue
+		}
 		if img.os == i.os && img.k8sVersion == i.k8sVersion && img.instanceType == i.instanceType {
 			i.raw = img.raw
 			return true
@@ -83,13 +70,13 @@ func (i *image) findIn(images []image) bool {
 
 // getImage checks if maas contains an image that matches the user
 // specification and returns it.
-func getImage(c *maas.Client, osVersion, k8sVersion, instanceType string) string {
+func getImage(c maas.Client, osVersion, k8sVersion, instanceType string) string {
 	i := image{
 		os:           osVersion,
 		k8sVersion:   k8sVersion,
 		instanceType: instanceType,
 	}
-	if i.findIn(getImages(c)) {
+	if i.findIn(c.Images()) {
 		return i.raw
 	}
 	return ""

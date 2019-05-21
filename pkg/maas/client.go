@@ -26,8 +26,14 @@ import (
 	"github.com/juju/gomaasapi"
 )
 
-type Client struct {
-	Controller gomaasapi.Controller
+type Client interface {
+	Create(context.Context, *CreateRequest) (*CreateResponse, error)
+	Delete(context.Context, *DeleteRequest) error
+	Images() []string
+}
+
+type client struct {
+	gomaasapi.Controller
 }
 
 type NewClientParams struct {
@@ -41,10 +47,10 @@ func NewClient(params *NewClientParams) (Client, error) {
 		BaseURL: params.ApiURL,
 		APIKey:  params.ApiKey})
 	if err != nil {
-		return Client{}, fmt.Errorf("error creating controller with version: %v", err)
+		return nil, fmt.Errorf("error creating controller with version: %v", err)
 	}
 
-	return Client{Controller: controller}, nil
+	return &client{Controller: controller}, nil
 }
 
 type CreateRequest struct {
@@ -89,7 +95,7 @@ type CreateResponse struct {
 }
 
 // Create creates a machine
-func (c Client) Create(ctx context.Context, request *CreateRequest) (*CreateResponse, error) {
+func (c *client) Create(ctx context.Context, request *CreateRequest) (*CreateResponse, error) {
 	klog.Infof("Creating machine %s", request.ProviderID)
 
 	// Allocate MAAS machine
@@ -125,6 +131,21 @@ func (c Client) Create(ctx context.Context, request *CreateRequest) (*CreateResp
 	}, nil
 }
 
+func (c *client) Images() (images []string) {
+	br, err := c.BootResources()
+	if err != nil {
+		return
+	}
+
+	for _, v := range br {
+		if v.Type() != "Uploaded" {
+			continue
+		}
+		images = append(images, v.Name())
+	}
+	return
+}
+
 type DeleteRequest struct {
 	// ProviderID is the unique value passed in CreateRequest.
 	ProviderID string
@@ -136,7 +157,7 @@ type DeleteResponse struct {
 }
 
 // Delete deletes a machine
-func (c Client) Delete(ctx context.Context, request *DeleteRequest) error {
+func (c client) Delete(ctx context.Context, request *DeleteRequest) error {
 	if request.SystemID == "" {
 		klog.Warningf("can not delete  machine %s, providerID not set", request.ProviderID)
 		return fmt.Errorf("machine %s has not been created", request.ProviderID)
@@ -158,7 +179,7 @@ type UpdateRequest struct {
 }
 
 // Update updates a machine
-func (c Client) Update(ctx context.Context, request *UpdateRequest) error {
+func (c client) Update(ctx context.Context, request *UpdateRequest) error {
 	return nil
 }
 
@@ -168,7 +189,7 @@ type ExistsRequest struct {
 }
 
 // Exists test for the existence of a machine
-func (c Client) Exist(ctx context.Context, request *ExistsRequest) (bool, error) {
+func (c client) Exist(ctx context.Context, request *ExistsRequest) (bool, error) {
 	// ProviderID will be nil until Create completes successfully
 	if request.ProviderID == "" {
 		return false, nil

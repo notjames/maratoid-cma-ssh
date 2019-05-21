@@ -29,6 +29,7 @@ func Test_parse(t *testing.T) {
 		{name: "empty i", raw: "standard,,os=ubuntu,k8s=1.13.5", wantImg: standardImage("standard,,os=ubuntu,k8s=1.13.5"), wantOk: true},
 		{name: "unused i", raw: "os=ubuntu,andrew=cool,k8s=1.13.5,standard", wantImg: standardImage("os=ubuntu,andrew=cool,k8s=1.13.5,standard"), wantOk: true},
 		{name: "repeated key", raw: "os=fedora,os=ubuntu,k8s=1.12.5,k8s=1.13.5,gpu,standard", wantImg: standardImage("os=fedora,os=ubuntu,k8s=1.12.5,k8s=1.13.5,gpu,standard"), wantOk: true},
+		{name: "multiple =", raw: "====", wantImg: image{}, wantOk: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -45,20 +46,19 @@ func Test_parse(t *testing.T) {
 
 func Test_image_in(t *testing.T) {
 	standard, _ := parse("os=ubuntu,k8s=1.13.5,standard")
-	gpu, _ := parse("os=ubuntu,k8s=1.13.5,gpu")
 	tests := []struct {
 		name   string
 		i      image
-		images []image
+		images []string
 		want   bool
 	}{
-		{name: "empty slice", i: standard, images: []image{}, want: false},
-		{name: "not findIn", i: standard, images: []image{gpu}, want: false},
+		{name: "empty slice", i: standard, images: []string{}, want: false},
+		{name: "not findIn", i: standard, images: []string{"os=ubuntu,k8s=1.13.5,gpu"}, want: false},
 		{name: "nil slice", i: standard, images: nil, want: false},
-		{name: "findIn", i: standard, images: []image{{}, standard, gpu}, want: true},
-		{name: "different instance type", i: standard, images: []image{gpu}, want: false},
-		{name: "multiple matches", i: standard, images: []image{gpu, standard, standard}, want: true},
-		{name: "bad image", i: image{}, images: []image{standard, gpu, {}}, want: false},
+		{name: "findIn", i: standard, images: []string{"", "os=ubuntu,k8s=1.13.5,standard", "os=ubuntu,k8s=1.13.5,gpu"}, want: true},
+		{name: "different instance type", i: standard, images: []string{"os=ubuntu,k8s=1.13.5,gpu"}, want: false},
+		{name: "multiple matches", i: standard, images: []string{"os=ubuntu,k8s=1.13.5,gpu", "os=ubuntu,k8s=1.13.5,standard", "os=ubuntu,k8s=1.13.5,standard"}, want: true},
+		{name: "bad image", i: image{}, images: []string{"os=ubuntu,k8s=1.13.5,standard", "os=ubuntu,k8s=1.13.5,gpu", ""}, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

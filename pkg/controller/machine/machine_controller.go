@@ -191,7 +191,11 @@ func (r *ReconcileMachine) Reconcile(request reconcile.Request) (reconcile.Resul
 	if !machine.DeletionTimestamp.IsZero() && machine.Status.Phase != common.DeletingMachinePhase {
 		log.Info("machine is being deleted update phase to deleteing")
 		machine.Status.Phase = common.DeletingMachinePhase
-		if err := r.Update(context.Background(), &machine); err != nil {
+		err := r.Update(context.Background(), &machine)
+		if apierrors.IsNotFound(err) {
+			return reconcile.Result{}, nil
+		} else if err != nil {
+			log.Error(err, "this is broken")
 			return reconcile.Result{}, err
 		}
 	}
@@ -205,7 +209,7 @@ func (r *ReconcileMachine) Reconcile(request reconcile.Request) (reconcile.Resul
 		err = r.handleDelete(&machine, &cluster)
 	case common.ErrorMachinePhase, common.ReadyMachinePhase, common.UpgradingMachinePhase:
 	default:
-		err = create(r, &r.MAASClient, &machine)
+		err = create(r, r.MAASClient, &machine, &cluster, &secret)
 	}
 	if err != nil {
 		switch e := errors.Cause(err).(type) {

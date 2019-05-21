@@ -17,8 +17,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/common"
@@ -45,28 +45,30 @@ func (e errRelease) Error() string {
 	return e.err.Error()
 }
 
-type clientEventer interface {
-	client.Client
-	record.EventRecorder
+// TODO (zachpuck): figure out a better name
+type creatorClients struct {
+	k8sClient       client.Client
+	maasClient      maas.Client
+	secretInterface v1.SecretInterface
 }
 
 type creator struct {
-	k8sClient  clientEventer
-	maasClient *maas.Client
-	machine    *clusterv1alpha1.CnctMachine
-	err        error
+	creatorClients
+
+	machine *clusterv1alpha1.CnctMachine
+	cluster *clusterv1alpha1.CnctCluster
+	secret  *corev1.Secret
+	err     error
 
 	// derived types
-	isMaster       bool
-	cluster        clusterv1alpha1.CnctCluster
-	clientset      *kubernetes.Clientset
-	secret         corev1.Secret
-	token          string
-	createRequest  maas.CreateRequest
-	createResponse maas.CreateResponse
+	isMaster      bool
+	clientset     *kubernetes.Clientset
+	token         string
+	createRequest *maas.CreateRequest
+	host          string
 }
 
-func create(k8sClient clientEventer, maasClient *maas.Client, machine *clusterv1alpha1.CnctMachine) error {
+func create(k8sClient client.Client, maasClient maas.Client, machine *clusterv1alpha1.CnctMachine, cluster *clusterv1alpha1.CnctCluster, secret *corev1.Secret) error {
 	log.Info("checking if machine is master")
 	var isMaster bool
 	for _, v := range machine.Spec.Roles {
@@ -75,102 +77,95 @@ func create(k8sClient clientEventer, maasClient *maas.Client, machine *clusterv1
 			break
 		}
 	}
-	c := &creator{k8sClient: k8sClient, maasClient: maasClient, machine: machine}
+	c := &creator{creatorClients: creatorClients{k8sClient: k8sClient, maasClient: maasClient}}
 	c.isMaster = isMaster
+	c.machine = machine
+	c.cluster = cluster
+	c.secret = secret
 	if isMaster {
-		c.getCluster()
-		c.getSecret()
-		c.prepareMaasRequest()
-		c.doMaasCreate()
-		c.createKubeconfig()
-		c.updateCluster()
-		c.updateMachine()
+		return createMaster(c)
 	} else {
-		c.getCluster()
-		c.getSecret()
-		c.createClientsetFromSecret()
-		c.checkIfTokenExists()
-		c.createToken()
-		c.checkApiserverAddress()
-		c.prepareMaasRequest()
-		c.doMaasCreate()
-		c.updateMachine()
+		return createWorker(c)
 	}
-	return c.err
 }
 
-func (c *creator) getCluster() {
-	if c.err != nil {
-		return
-	}
-
-	log.Info("getting cluster from namespace")
-	// Get cluster from machine's namespace.
-	var clusters clusterv1alpha1.CnctClusterList
-	c.err = c.k8sClient.List(
-		context.Background(),
-		&client.ListOptions{Namespace: c.machine.Namespace},
-		&clusters,
-	)
-	if c.err != nil {
-		return
-	}
-	if len(clusters.Items) == 0 {
-		log.Info("no cluster in namespace, requeue request")
-		c.err = errNotReady("no cluster in namespace")
-		return
-	}
-	c.cluster = clusters.Items[0]
-}
-
-func (c *creator) getSecret() {
-	if c.err != nil {
-		return
-	}
-	log.Info("getting the secret cert bundle")
-	c.err = c.k8sClient.Get(context.Background(), client.ObjectKey{Name: "cluster-private-key", Namespace: c.machine.Namespace}, &c.secret)
-}
-
-func (c *creator) createClientsetFromSecret() {
-	if c.err != nil || c.isMaster {
-		return
-	}
-
-	log.Info("creating clientset from cert bundle")
-	configData, ok := c.secret.Data[corev1.ServiceAccountKubeconfigKey]
-	if !ok || len(configData) == 0 {
-		c.err = errNotReady("no kubeconfig in secret")
-		return
-	}
-	config, err := clientcmd.NewClientConfigFromBytes(configData)
+func createMaster(c *creator) error {
+	var err error
+	c.createRequest, err = prepareMaasRequest(c)
 	if err != nil {
-		c.err = err
-		return
+		return errors.Wrap(err, "could not prepare maas request")
+	}
+	c.host, err = doMaasCreate(c)
+	if err != nil {
+		return errors.Wrap(err, "could not create maas node")
+	}
+	if err := createKubeconfig(c); err != nil {
+		return errors.Wrap(err, "could not create kubeconfig")
+	}
+	if err := updateCluster(c); err != nil {
+		return errors.Wrap(err, "could not update cluster status")
+	}
+	if err := updateMachine(c); err != nil {
+		return errors.Wrap(err, "could not update machine to ready")
+	}
+	return nil
+}
+
+func createWorker(c *creator) error {
+	if c.cluster.Status.APIEndpoint == "" {
+		return errNotReady(fmt.Sprintf("%s cluster APIEndpoint is not set", c.cluster.Name))
+	}
+	kubeconfig, ok := c.secret.Data[corev1.ServiceAccountKubeconfigKey]
+	if !ok || len(kubeconfig) == 0 {
+		return errNotReady("no kubeconfig in secret")
+	}
+
+	var err error
+	c.clientset, err = createClientsetFromSecret(kubeconfig)
+	if err != nil {
+		return err
+	}
+	c.secretInterface = c.clientset.CoreV1().Secrets(metav1.NamespaceSystem)
+	c.token, err = getExistingToken(c)
+	if err != nil {
+		return err
+	} else if c.token == "" {
+		c.token, err = createToken(c)
+		if err != nil {
+			return errors.Wrap(err, "could not create a bootstrap token")
+		}
+	}
+	c.createRequest, err = prepareMaasRequest(c)
+	if err != nil {
+		return errors.Wrap(err, "could not prepare maas request")
+	}
+	c.host, err = doMaasCreate(c)
+	if err != nil {
+		return errors.Wrap(err, "could not create maas node")
+	}
+	return updateMachine(c)
+}
+
+func createClientsetFromSecret(kubeconfig []byte) (*kubernetes.Clientset, error) {
+	log.Info("creating clientset from cert bundle")
+	config, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not create new config")
 	}
 	restConfig, err := config.ClientConfig()
 	if err != nil {
-		c.err = err
-		return
+		return nil, errors.Wrap(err, "could not create rest config")
 	}
-	c.clientset, c.err = kubernetes.NewForConfig(restConfig)
+	return kubernetes.NewForConfig(restConfig)
 }
 
-func (c *creator) checkIfTokenExists() {
-	if c.err != nil || c.isMaster {
-		return
-	}
+func getExistingToken(c *creator) (string, error) {
 	log.Info("checking for existing tokens on managed cluster")
-	list, err := c.clientset.CoreV1().
-		Secrets(metav1.NamespaceSystem).
-		List(metav1.ListOptions{FieldSelector: "type=" + string(corev1.SecretTypeBootstrapToken)})
-	if err != nil {
-		e, ok := err.(*apierrors.StatusError)
-		if !ok {
-			c.err = errNotReady(err.Error())
-		} else {
-			c.err = e
-		}
-		return
+	list, err := c.secretInterface.List(metav1.ListOptions{FieldSelector: "type=" + string(corev1.SecretTypeBootstrapToken)})
+	if apierrors.IsNotFound(err) {
+		return "", errors.Wrap(err, "bootstrap token not found")
+	} else if err != nil {
+		return "", errNotReady(err.Error())
 	}
 
 	// find the first non-expired token
@@ -181,40 +176,34 @@ func (c *creator) checkIfTokenExists() {
 			if err != nil || t.Before(time.Now()) {
 				continue
 			}
-			log.Info("found an existing token")
-			c.token = fmt.Sprintf("%s.%s", list.Items[0].Data["token-id"], list.Items[0].Data["token-secret"])
-			return
 		}
 		log.Info("found an existing token")
-		c.token = fmt.Sprintf("%s.%s", list.Items[0].Data["token-id"], list.Items[0].Data["token-secret"])
-		return
+		token := fmt.Sprintf("%s.%s", list.Items[0].Data["token-id"], list.Items[0].Data["token-secret"])
+		return token, nil
 	}
+	return "", nil
 }
 
-func (c *creator) createToken() {
-	if c.err != nil || c.isMaster || c.token != "" {
-		return
-	}
-
+func createToken(c *creator) (string, error) {
 	log.Info("creating join token")
 	tokBuf := make([]byte, 3)
-	_, c.err = io.ReadFull(rand.Reader, tokBuf)
-	if c.err != nil {
-		return
+	_, err := io.ReadFull(rand.Reader, tokBuf)
+	if err != nil {
+		return "", err
 	}
 	tokSecBuf := make([]byte, 8)
-	_, c.err = io.ReadFull(rand.Reader, tokSecBuf)
-	if c.err != nil {
-		return
+	_, err = io.ReadFull(rand.Reader, tokSecBuf)
+	if err != nil {
+		return "", err
 	}
-	c.err = createBootstrapToken(c.clientset, fmt.Sprintf("%x", tokBuf), fmt.Sprintf("%x", tokSecBuf))
-	if c.err != nil {
-		return
+	err = createBootstrapToken(c.secretInterface, fmt.Sprintf("%x", tokBuf), fmt.Sprintf("%x", tokSecBuf))
+	if err != nil {
+		return "", err
 	}
-	c.token = fmt.Sprintf("%x.%x", tokBuf, tokSecBuf)
+	return fmt.Sprintf("%x.%x", tokBuf, tokSecBuf), nil
 }
 
-func createBootstrapToken(clientset *kubernetes.Clientset, tokenID, tokenSecret string) error {
+func createBootstrapToken(s v1.SecretInterface, tokenID, tokenSecret string) error {
 	token := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "bootstrap-token-" + tokenID,
@@ -231,23 +220,10 @@ func createBootstrapToken(clientset *kubernetes.Clientset, tokenID, tokenSecret 
 			"auth-extra-groups":              []byte("system:bootstrappers:kubeadm:default-node-token"),
 		},
 	}
-	if _, err := clientset.CoreV1().Secrets("kube-system").Create(&token); err != nil {
+	if _, err := s.Create(&token); err != nil {
 		return errors.Wrap(err, "could not create token secret")
 	}
 	return nil
-}
-
-func (c *creator) checkApiserverAddress() {
-	if c.err != nil || c.isMaster {
-		return
-	}
-
-	log.Info("checking if apiendpoint is set on cluster")
-	apiserverAddress := c.cluster.Status.APIEndpoint
-	if apiserverAddress == "" {
-		c.err = errNotReady(fmt.Sprintf("%s cluster APIEndpoint is not set", c.cluster.Name))
-		return
-	}
 }
 
 func (c *creator) getNodeLabels() string {
@@ -262,37 +238,34 @@ func (c *creator) getNodeLabels() string {
 	return sb.String()
 }
 
-func (c *creator) prepareMaasRequest() {
-	if c.err != nil {
-		return
-	}
-
+func prepareMaasRequest(c *creator) (*maas.CreateRequest, error) {
 	log.Info("preparing maas request")
-	var bundle *cert.CABundle
-	bundle, c.err = cert.CABundleFromMap(c.secret.Data)
-	if c.err != nil {
-		return
+	bundle, err := cert.CABundleFromMap(c.secret.Data)
+	if err != nil {
+		return nil, err
 	}
 	var userdata string
 	if c.isMaster {
-		userdata, c.err = masterUserdata(c, bundle)
+		userdata, err = masterUserdata(c, bundle)
 	} else {
-		userdata, c.err = workerUserdata(c, bundle)
+		userdata, err = workerUserdata(c, bundle)
+	}
+	if err != nil {
+		return nil, err
 	}
 	// TODO: ProviderID should be unique. One way to ensure this is to generate
 	// a UUID. Cf. k8s.io/apimachinery/pkg/util/uuid
 	providerID := fmt.Sprintf("%s-%s", c.cluster.Name, c.machine.Name)
 	distro := getImage(c.maasClient, "ubuntu-xenial", c.cluster.Spec.KubernetesVersion, c.machine.Spec.InstanceType)
 	if distro == "" {
-		c.err = errors.New("image does not exist")
-		return
+		return nil, errors.New("image does not exist")
 	}
-	c.createRequest = maas.CreateRequest{
+	return &maas.CreateRequest{
 		ProviderID:   providerID,
 		Distro:       distro,
 		Userdata:     userdata,
 		InstanceType: c.machine.Spec.InstanceType,
-	}
+	}, nil
 }
 
 const masterUserdataTmplText = `#cloud-config
@@ -406,61 +379,76 @@ func workerUserdata(c *creator, bundle *cert.CABundle) (string, error) {
 	return buf.String(), nil
 }
 
-func (c *creator) doMaasCreate() {
-	if c.err != nil {
-		return
-	}
-
+// doMaasCreate returns the ip addr of the created instance or an error. It also
+// updates the status of the machine object with the maas nodes information. If
+// any steps fail the maas node will be released and it is safe to try again. If
+// the systemId of the machine is already set then we return without taking any
+// actions.
+func doMaasCreate(c *creator) (string, error) {
 	log.Info("calling create on maas")
-	createResponse, err := c.maasClient.Create(context.Background(), &c.createRequest)
+	if c.machine.Status.SystemId != "" {
+		log.Info("machine already allocated")
+		return c.machine.Status.SshConfig.Host, nil
+	}
+	createResponse, err := c.maasClient.Create(context.Background(), c.createRequest)
 	if err != nil {
-		c.err = err
-		return
+		return "", err
 	}
 
-	if len(createResponse.IPAddresses) == 0 {
+	if len(createResponse.IPAddresses) == 0 && createResponse.IPAddresses[0] != "" {
 		log.Info("machine ip is nil, releasing", "maas create response", createResponse)
-		c.err = c.maasClient.Delete(
+		err = c.maasClient.Delete(
 			context.Background(),
 			&maas.DeleteRequest{
 				ProviderID: createResponse.ProviderID,
 				SystemID:   createResponse.SystemID,
 			},
 		)
-		return
+		if err != nil {
+			return "", err
+		}
+		return "", errors.New("no ip address returned from maas")
 	}
-	c.createResponse = *createResponse
+	c.machine.Status.SystemId = createResponse.SystemID
+	c.machine.Status.SshConfig.Host = createResponse.IPAddresses[0]
+	c.machine.Status.KubernetesVersion = c.cluster.Spec.KubernetesVersion
+	err = c.k8sClient.Update(context.Background(), c.machine)
+	if err != nil {
+		delErr := c.maasClient.Delete(
+			context.Background(),
+			&maas.DeleteRequest{
+				ProviderID: createResponse.ProviderID,
+				SystemID:   createResponse.SystemID,
+			},
+		)
+		if delErr != nil {
+			innerErr := errors.Wrap(delErr, "could not delete machine").Error()
+			return "", errors.Wrap(err, innerErr)
+		}
+		return "", err
+	}
+	return createResponse.IPAddresses[0], nil
 }
 
-func (c *creator) createKubeconfig() {
-	if c.err != nil || !c.isMaster {
-		return
-	}
-
+func createKubeconfig(c *creator) error {
 	log.Info("creating kubeconfig")
 	bundle, err := cert.CABundleFromMap(c.secret.Data)
 	if err != nil {
-		c.err = err
-		return
+		return err
 	}
 
 	log.Info("create kubeconfig")
-	kubeconfig, err := bundle.Kubeconfig(c.cluster.Name, "https://"+c.createResponse.IPAddresses[0]+":6443")
+	kubeconfig, err := bundle.Kubeconfig(c.cluster.Name, "https://"+c.host+":6443")
 	if err != nil {
-		c.err = err
-		return
+		return err
 	}
 
 	log.Info("add kubeconfig to cluster-private-key secret")
 	c.secret.Data[corev1.ServiceAccountKubeconfigKey] = kubeconfig
-	c.err = c.k8sClient.Update(context.Background(), &c.secret)
+	return c.k8sClient.Update(context.Background(), c.secret)
 }
 
-func (c *creator) updateMachine() {
-	if c.err != nil {
-		return
-	}
-
+func updateMachine(c *creator) error {
 	// Add the finalizer
 	if !util.ContainsString(c.machine.Finalizers, clusterv1alpha1.MachineFinalizer) {
 		log.Info("adding finalizer to machine")
@@ -470,63 +458,19 @@ func (c *creator) updateMachine() {
 	log.Info("update machine status to ready")
 	// update status to "creating"
 	c.machine.Status.Phase = common.ReadyMachinePhase
-	c.machine.Status.KubernetesVersion = c.cluster.Spec.KubernetesVersion
-	c.machine.Status.SystemId = c.createResponse.SystemID
-	c.machine.Status.SshConfig.Host = c.createResponse.IPAddresses[0]
 	// Check if machine object has existing annotations
 	if c.machine.ObjectMeta.Annotations == nil {
 		c.machine.ObjectMeta.Annotations = map[string]string{}
 	}
-	// TODO: (zachpuck) Move these Annotations to Status
-	c.machine.ObjectMeta.Annotations["maas-ip"] = c.createResponse.IPAddresses[0]
-	c.machine.ObjectMeta.Annotations["maas-system-id"] = c.createResponse.SystemID
 
-	err := c.k8sClient.Update(context.Background(), c.machine)
-	if err != nil {
-		c.err = errRelease{systemID: c.createResponse.SystemID, err: err}
-		return
-	}
-
-	c.k8sClient.Event(
-		c.machine,
-		corev1.EventTypeNormal,
-		"ResourceStateChange",
-		"set Finalizer and OwnerReferences",
-	)
+	return c.k8sClient.Update(context.Background(), c.machine)
 }
 
-func (c *creator) updateCluster() {
-	if c.err != nil || !c.isMaster {
-		return
-	}
-
+func updateCluster(c *creator) error {
 	log.Info("updating cluster")
 	log.Info("updating cluster api endpoint")
-	var fresh clusterv1alpha1.CnctCluster
-	err := c.k8sClient.Get(
-		context.Background(),
-		client.ObjectKey{
-			Namespace: c.cluster.GetNamespace(),
-			Name:      c.cluster.GetName(),
-		},
-		&fresh,
-	)
-	if err != nil {
-		c.err = errRelease{err: err, systemID: c.createResponse.SystemID}
-	}
 
-	fresh.Status.APIEndpoint = c.createResponse.IPAddresses[0] + ":6443"
-	fresh.Status.LastUpdated = &metav1.Time{Time: time.Now()}
-	err = c.k8sClient.Update(context.Background(), &fresh)
-	if err != nil {
-		c.err = errRelease{err: err, systemID: c.createResponse.SystemID}
-		return
-	}
-
-	c.k8sClient.Event(
-		&fresh,
-		corev1.EventTypeNormal,
-		"ResourceStateChange",
-		"set cluster APIEndpoint",
-	)
+	// TODO (apo): we may need to be smarter about adding the port to the host
+	c.cluster.Status.APIEndpoint = c.machine.Status.SshConfig.Host + ":6443"
+	return c.k8sClient.Update(context.Background(), c.cluster)
 }

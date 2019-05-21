@@ -18,7 +18,6 @@ import (
 
 	clusterv1alpha1 "github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/v1alpha1"
 	"github.com/samsung-cnct/cma-ssh/pkg/maas"
-	"github.com/samsung-cnct/cma-ssh/pkg/util"
 )
 
 func (r *ReconcileMachine) handleDelete(
@@ -68,8 +67,13 @@ func (r *ReconcileMachine) handleDelete(
 	// if the machine node has already been deleted or the entire cluster is
 	// being deleted then we don't need to worry about cordoning and
 	// draining the node. We can just release the machine in maas.
+	if !cluster.DeletionTimestamp.IsZero() {
+		if delerr := deleteMachine(r, machine); delerr != nil {
+			return errors.Wrap(delerr, "could not delete machine object")
+		}
+	}
 	node, err := clientset.CoreV1().Nodes().Get(machine.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) || !cluster.DeletionTimestamp.IsZero() {
+	if apierrors.IsNotFound(err) {
 		if delerr := deleteMachine(r, machine); delerr != nil {
 			return errors.Wrap(delerr, "could not delete machine object")
 		}
@@ -188,8 +192,10 @@ func deleteMachine(r *ReconcileMachine, machine *clusterv1alpha1.CnctMachine) er
 		}
 	}
 
-	machine.Finalizers = util.RemoveString(machine.Finalizers, clusterv1alpha1.MachineFinalizer)
-	if err := r.Client.Update(context.Background(), machine); err != nil {
+	var fresh clusterv1alpha1.CnctMachine
+	r.Client.Get(context.Background(), client.ObjectKey{Namespace: machine.Namespace, Name: machine.Name}, &fresh)
+	fresh.Finalizers = []string{}
+	if err := r.Client.Update(context.Background(), &fresh); err != nil {
 		return errors.Wrap(err, "could not remove finalizer")
 	}
 	return nil
