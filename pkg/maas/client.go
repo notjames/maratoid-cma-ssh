@@ -157,7 +157,7 @@ type DeleteResponse struct {
 }
 
 // Delete deletes a machine
-func (c client) Delete(ctx context.Context, request *DeleteRequest) error {
+func (c *client) Delete(ctx context.Context, request *DeleteRequest) error {
 	if request.SystemID == "" {
 		klog.Warningf("can not delete  machine %s, providerID not set", request.ProviderID)
 		return fmt.Errorf("machine %s has not been created", request.ProviderID)
@@ -179,7 +179,7 @@ type UpdateRequest struct {
 }
 
 // Update updates a machine
-func (c client) Update(ctx context.Context, request *UpdateRequest) error {
+func (c *client) Update(ctx context.Context, request *UpdateRequest) error {
 	return nil
 }
 
@@ -189,7 +189,7 @@ type ExistsRequest struct {
 }
 
 // Exists test for the existence of a machine
-func (c client) Exist(ctx context.Context, request *ExistsRequest) (bool, error) {
+func (c *client) Exist(ctx context.Context, request *ExistsRequest) (bool, error) {
 	// ProviderID will be nil until Create completes successfully
 	if request.ProviderID == "" {
 		return false, nil
