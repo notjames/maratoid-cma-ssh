@@ -173,6 +173,16 @@ func (r *ReconcileCluster) Reconcile(request reconcile.Request) (reconcile.Resul
 			log.Info("cluster deletion pending on machine deletion", "pending machines", len(pendingMachines))
 			return reconcile.Result{RequeueAfter: 1 * time.Second}, nil
 		}
+		var secret corev1.Secret
+		err = r.Get(context.Background(), client.ObjectKey{Name: "cluster-private-key", Namespace: cluster.Namespace}, &secret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		secret.SetFinalizers(nil)
+		err = r.Update(context.Background(), &secret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 		cluster.ObjectMeta.Finalizers =
 			util.RemoveString(cluster.ObjectMeta.Finalizers, clusterv1alpha1.ClusterFinalizer)
 		return reconcile.Result{}, r.Update(context.Background(), cluster)
@@ -192,8 +202,9 @@ func createClusterSecrets(k8sClient client.Client, cluster *clusterv1alpha1.Cnct
 	bundle.MergeWithMap(dataMap)
 	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cluster-private-key",
-			Namespace: cluster.Namespace,
+			Name:       "cluster-private-key",
+			Namespace:  cluster.Namespace,
+			Finalizers: []string{"foregroundDeletion"},
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: dataMap,

@@ -28,8 +28,7 @@ func (r *ReconcileMachine) handleDelete(
 
 	// If the machine does not have a system id yet then it has not been
 	// acquired or deployed in maas so we can just delete it.
-	if machine.Status.SystemId == "" {
-		log.Info("there is no maas node asssociated with this machine")
+	if machine.Status.SystemId == "" || !cluster.DeletionTimestamp.IsZero() {
 		if err := deleteMachine(r, machine); err != nil {
 			return errors.Wrap(err, "could not delete machine object")
 		}
@@ -44,7 +43,11 @@ func (r *ReconcileMachine) handleDelete(
 		},
 		&secret,
 	)
-	if err != nil {
+	if apierrors.IsNotFound(err) {
+		if err := deleteMachine(r, machine); err != nil {
+			return errors.Wrap(err, "could not delete machine object")
+		}
+	} else if err != nil {
 		return errors.Wrap(err, "could not get cluster secret")
 	}
 	configData, ok := secret.Data[corev1.ServiceAccountKubeconfigKey]
@@ -64,14 +67,9 @@ func (r *ReconcileMachine) handleDelete(
 		return errors.Wrap(err, "could not create clientset")
 	}
 
-	// if the machine node has already been deleted or the entire cluster is
-	// being deleted then we don't need to worry about cordoning and
-	// draining the node. We can just release the machine in maas.
-	if !cluster.DeletionTimestamp.IsZero() {
-		if delerr := deleteMachine(r, machine); delerr != nil {
-			return errors.Wrap(delerr, "could not delete machine object")
-		}
-	}
+	// if the machine node has already been deleted then we don't need to
+	// worry about cordoning and draining the node. We can just release the
+	// machine in maas.
 	node, err := clientset.CoreV1().Nodes().Get(machine.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		if delerr := deleteMachine(r, machine); delerr != nil {

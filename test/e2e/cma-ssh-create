@@ -1,0 +1,69 @@
+#!/bin/bash
+
+CURL='curl --fail --show-error -ksLX'
+CURL_OPTS=${CURL_OPTS:-""}
+
+DEBUG=${DEBUG:-1}
+
+[[ $DEBUG == 1 ]] && \
+  {
+    set -o xtrace
+    CURL_OPTS+="-vvv"
+  }
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+DATA=$(cat <<JSON
+{
+  "name": "${CLUSTER_NAME}",
+  "k8s_version": "${K8S_VERSION}",
+  "high_availability": true,
+  "network_fabric": "",
+  "control_plane_nodes": [
+    {
+      "username": "test",
+      "labels": [
+        {
+          "name": "cma-ssh-test",
+          "value": "true"
+        }
+      ],
+      "taints": [
+      ],
+      "instanceType": "standard"
+    }
+  ],
+  "worker_nodes": [
+    {
+      "username": "string",
+      "labels": [
+        {
+          "name": "cma-ssh-test",
+          "value": "true"
+        }
+      ],
+      "taints": [
+      ],
+      "instanceType": "standard"
+    }
+  ],
+  "api_endpoint": "",
+  "private_key": ""
+}
+JSON
+)
+
+main()
+{
+  # shellcheck disable=SC2086
+  $CURL POST \
+    "${CLUSTER_API}/api/v1/cluster" \
+    -H 'Cache-Control: no-cache' \
+    -H 'Content-Type: application/json' \
+    -d "${DATA}" \
+    -iks
+}
+
+main

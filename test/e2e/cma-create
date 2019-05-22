@@ -24,32 +24,30 @@ DATA=$(cat <<JSON
     "ssh": {
       "control_plane_nodes": [
         {
-          "username": "${SSH_USERNAME}",
-          "host": "${CONTROL_PLANE_PRIVATE_IP}",
-          "port": ${SSH_PORT},
-          "password": "${SSH_PASSWORD}",
+          "username": "test",
           "labels": [
             {
-              "name": "pipeline-test",
+              "name": "e2e-test",
               "value": "true"
             }
           ],
-          "publichost": "${CONTROL_PLANE_PUBLIC_IP}"
+          "taints": [
+          ],
+          "instanceType": "standard"
         }
       ],
       "worker_nodes": [
         {
-          "username": "${SSH_USERNAME}",
-          "host": "${WORKER01_PRIVATE_IP}",
-          "port": ${SSH_PORT},
-          "password": "${SSH_PASSWORD}",
+          "username": "test",
           "labels": [
             {
-              "name": "pipeline-test",
+              "name": "e2e-test",
               "value": "true"
             }
           ],
-          "publichost": "${WORKER01_PUBLIC_IP}"
+          "taints": [
+          ],
+          "instanceType": "standard"
         }
       ],
       "api_endpoint": ""
@@ -72,7 +70,8 @@ main()
     "${CLUSTER_API}/api/v1/cluster" \
     -H 'Cache-Control: no-cache' \
     -H 'Content-Type: application/json' \
-    -d "${DATA}" $CURL_OPTS
+    -d "${DATA}" \
+    -iks
 }
 
 main

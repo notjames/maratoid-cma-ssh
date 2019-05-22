@@ -3,7 +3,7 @@ logLevel: 8
 images:
    operator:
       repository: quay.io/samsung_cnct/cma-ssh
-      tag: 0.1.70
+      tag: 0.1.73
       pullPolicy: Always
    bootstrap:
       repository: quay.io/samsung_cnct/cma-ssh-bootstrap

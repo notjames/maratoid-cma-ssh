@@ -1,8 +1,42 @@
 # Purpose
 
-This e2e tests CMA using the SSH provider. These tests demonstrate base end to end functionality of the cma-ssh helper of the Cluster Manager API. The use of `cma-ssh` in this test is mildly inconsequential as the primary successful test story for this test is to make sure that CMA works end-to-end.
+The e2e tests are used to test end to end functionality of the cma-ssh api.  The cms-ssh api is the primary endpoint
+for cma-ssh functionality, and the cluster-manager-api(cma) api provides an end user endpoint to include callbacks
+and access to other providers.  There are scripts here to test both api endpoints (cma, and cma-ssh).
 
-# Context
+# Developer Context
+
+When making changes to cma-ssh, the developer and possibly reviewer should run the `full-test-cma-ssh.sh` script which will e2e test the cma-ssh api.
+
+# How to run `full-test-cma-ssh.sh`
+
+```bash
+# create a k8s cluster to use for cma-ssh
+minikube start
+kubectl create clusterrolebinding superpowers --clusterrole=cluster-admin --user=system:serviceaccount:kube-system:default
+kubectl create rolebinding superpowers --clusterrole=cluster-admin --user=system:serviceaccount:kube-system:default
+kubectl apply -f crd
+
+# build and run cma-ssh
+cd $GOPATH/src/github.com/samsung-cnct/cma-ssh
+go1.12.4 build -o cma-ssh cmd/cma-ssh/main.go
+MAAS_API_URL=http://192.168.2.24:5240/MAAS MAAS_API_VERSION_KEY=2.0 MAAS_API_KEY=<your maas key> ./cma-ssh --logtostderr
+
+# run the e2e script
+cd $GOPATH/src/github.com/samsung-cnct/cma-ssh/test/e2e
+source ./testEnvs.sh
+./full-test-cma-ssh.sh
+
+# Look at test output and final status
+full-test-cma-ssh PASSED
+
+```
+
+# CI Pipeline Context
+
+TBD.  CI needs access to the MaaS environment in order to test end to end provisioning.
+
+# Deprecated
 
 This set of tests using the Cluster Manager API pipeline through CMA SSH, which will install a managed cluster on pre-provisioned hosts. In order for this specific set of tests to work, you *must* have at least two IP addresses (machines, vms, etc) running BEFORE these tests can be performed.
 
