@@ -125,8 +125,7 @@ func createWorker(c *creator) error {
 	if err != nil {
 		return err
 	}
-	c.secretInterface = c.clientset.CoreV1().Secrets(metav1.NamespaceSystem)
-	c.token, err = getExistingToken(c)
+	c.token, err = getExistingToken(c.clientset.CoreV1().Secrets(metav1.NamespaceSystem).List)
 	if err != nil {
 		return err
 	} else if c.token == "" {
@@ -159,15 +158,19 @@ func createClientsetFromSecret(kubeconfig []byte) (*kubernetes.Clientset, error)
 	return kubernetes.NewForConfig(restConfig)
 }
 
-func getExistingToken(c *creator) (string, error) {
-	log.Info("checking for existing tokens on managed cluster")
-	list, err := c.secretInterface.List(metav1.ListOptions{FieldSelector: "type=" + string(corev1.SecretTypeBootstrapToken)})
+// getExistingToken uses the secretListFn to list the bootstrap token secrets on
+// the remote cluster. If there is an unexpired token in the returned list we
+// return that token. If we get a not found error or the all the tokens have
+// expired then we return an empty string and nil error. In all other cases we
+// return an error. Users must check both error and string returned.
+func getExistingToken(secretListFn func(options metav1.ListOptions) (*corev1.SecretList, error)) (string, error) {
+	opt := metav1.ListOptions{FieldSelector: "type=" + string(corev1.SecretTypeBootstrapToken)}
+	list, err := secretListFn(opt)
 	if apierrors.IsNotFound(err) {
-		return "", errors.Wrap(err, "bootstrap token not found")
+		return "", nil
 	} else if err != nil {
 		return "", errNotReady(err.Error())
 	}
-
 	// find the first non-expired token
 	for _, secret := range list.Items {
 		expires, ok := secret.Data["expiration"]
