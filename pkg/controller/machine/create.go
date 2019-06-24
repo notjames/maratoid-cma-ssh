@@ -336,6 +336,7 @@ runcmd:
  - [ sh, -c, "tar xf /etc/kubernetes/pki/certs.tar -C /etc/kubernetes/pki" ]
  - [ sh, -c, "kubeadm init --node-name {{ .Name }}  --config /var/tmp/masterconfig.yaml" ]
  - [ sh, -c, "kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml" ]
+ - [ sh, -c, "kubectl --kubeconfig /etc/kubernetes/admin.conf taint node {{ .Name }} node-role.kubernetes.io/master:NoSchedule-" ]
 
 output : { all : '| tee -a /var/log/cloud-init-output.log' }
 `
