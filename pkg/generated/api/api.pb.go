@@ -4,12 +4,14 @@
 package cmassh
 
 import (
+	context "context"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	_ "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger/options"
-	context "golang.org/x/net/context"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -22,7 +24,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type ClusterStatus int32
 
@@ -1907,6 +1909,44 @@ type ClusterServer interface {
 	GetUpgradeClusterInformation(context.Context, *GetUpgradeClusterInformationMsg) (*GetUpgradeClusterInformationReply, error)
 	// Will attempt to upgrade a cluster
 	UpgradeCluster(context.Context, *UpgradeClusterMsg) (*UpgradeClusterReply, error)
+}
+
+// UnimplementedClusterServer can be embedded to have forward compatible implementations.
+type UnimplementedClusterServer struct {
+}
+
+func (*UnimplementedClusterServer) CreateCluster(ctx context.Context, req *CreateClusterMsg) (*CreateClusterReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCluster not implemented")
+}
+func (*UnimplementedClusterServer) GetCluster(ctx context.Context, req *GetClusterMsg) (*GetClusterReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCluster not implemented")
+}
+func (*UnimplementedClusterServer) DeleteCluster(ctx context.Context, req *DeleteClusterMsg) (*DeleteClusterReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteCluster not implemented")
+}
+func (*UnimplementedClusterServer) GetClusterList(ctx context.Context, req *GetClusterListMsg) (*GetClusterListReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClusterList not implemented")
+}
+func (*UnimplementedClusterServer) GetClusterNodesStatus(ctx context.Context, req *GetClusterNodesStatusMsg) (*GetClusterNodesStatusReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClusterNodesStatus not implemented")
+}
+func (*UnimplementedClusterServer) GetVersionInformation(ctx context.Context, req *GetVersionMsg) (*GetVersionReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersionInformation not implemented")
+}
+func (*UnimplementedClusterServer) AddNodePool(ctx context.Context, req *AddNodePoolMsg) (*AddNodePoolReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddNodePool not implemented")
+}
+func (*UnimplementedClusterServer) DeleteNodePool(ctx context.Context, req *DeleteNodePoolMsg) (*DeleteNodePoolReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteNodePool not implemented")
+}
+func (*UnimplementedClusterServer) ScaleNodePool(ctx context.Context, req *ScaleNodePoolMsg) (*ScaleNodePoolReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScaleNodePool not implemented")
+}
+func (*UnimplementedClusterServer) GetUpgradeClusterInformation(ctx context.Context, req *GetUpgradeClusterInformationMsg) (*GetUpgradeClusterInformationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUpgradeClusterInformation not implemented")
+}
+func (*UnimplementedClusterServer) UpgradeCluster(ctx context.Context, req *UpgradeClusterMsg) (*UpgradeClusterReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpgradeCluster not implemented")
 }
 
 func RegisterClusterServer(s *grpc.Server, srv ClusterServer) {

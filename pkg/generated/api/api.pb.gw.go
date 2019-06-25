@@ -53,7 +53,10 @@ func request_Cluster_GetCluster_0(ctx context.Context, marshaler runtime.Marshal
 	var protoReq GetClusterMsg
 	var metadata runtime.ServerMetadata
 
-	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Cluster_GetCluster_0); err != nil {
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_GetCluster_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -70,7 +73,10 @@ func request_Cluster_DeleteCluster_0(ctx context.Context, marshaler runtime.Mars
 	var protoReq DeleteClusterMsg
 	var metadata runtime.ServerMetadata
 
-	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Cluster_DeleteCluster_0); err != nil {
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_DeleteCluster_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -96,7 +102,10 @@ func request_Cluster_GetClusterNodesStatus_0(ctx context.Context, marshaler runt
 	var protoReq GetClusterNodesStatusMsg
 	var metadata runtime.ServerMetadata
 
-	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Cluster_GetClusterNodesStatus_0); err != nil {
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_GetClusterNodesStatus_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -139,7 +148,10 @@ func request_Cluster_DeleteNodePool_0(ctx context.Context, marshaler runtime.Mar
 	var protoReq DeleteNodePoolMsg
 	var metadata runtime.ServerMetadata
 
-	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Cluster_DeleteNodePool_0); err != nil {
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_DeleteNodePool_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -173,7 +185,10 @@ func request_Cluster_GetUpgradeClusterInformation_0(ctx context.Context, marshal
 	var protoReq GetUpgradeClusterInformationMsg
 	var metadata runtime.ServerMetadata
 
-	if err := runtime.PopulateQueryParameters(&protoReq, req.URL.Query(), filter_Cluster_GetUpgradeClusterInformation_0); err != nil {
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_GetUpgradeClusterInformation_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -461,27 +476,27 @@ func RegisterClusterHandlerClient(ctx context.Context, mux *runtime.ServeMux, cl
 }
 
 var (
-	pattern_Cluster_CreateCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, ""))
+	pattern_Cluster_CreateCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_GetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, ""))
+	pattern_Cluster_GetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_DeleteCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, ""))
+	pattern_Cluster_DeleteCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "cluster"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_GetClusterList_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "list"}, ""))
+	pattern_Cluster_GetClusterList_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "list"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_GetClusterNodesStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "nodesstatus"}, ""))
+	pattern_Cluster_GetClusterNodesStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "nodesstatus"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_GetVersionInformation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "version"}, ""))
+	pattern_Cluster_GetVersionInformation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "version"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_AddNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, ""))
+	pattern_Cluster_AddNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_DeleteNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, ""))
+	pattern_Cluster_DeleteNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_ScaleNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, ""))
+	pattern_Cluster_ScaleNodePool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "pool"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_GetUpgradeClusterInformation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "upgrade"}, ""))
+	pattern_Cluster_GetUpgradeClusterInformation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "upgrade"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Cluster_UpgradeCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "upgrade"}, ""))
+	pattern_Cluster_UpgradeCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "cluster", "upgrade"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
