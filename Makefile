@@ -75,34 +75,9 @@ protoc: build-dependencies-container bin/protoc-gen-go bin/protoc-gen-grpc-gatew
 manifests: bin/controller-gen bin/kustomize
 	bin/controller-gen crd --output-dir ${CURDIR}/crd
 	bin/controller-gen rbac --name rbac --output-dir ${CURDIR}/rbac
-	mkdir -p ${CURDIR}/build/kustomize/crd/protected/cluster/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/unprotected/cluster/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/protected/machine/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/unprotected/machine/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/protected/machineset/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/unprotected/machineset/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/protected/appbundle/base
-	mkdir -p ${CURDIR}/build/kustomize/crd/unprotected/appbundle/base
 	mkdir -p ${CURDIR}/build/kustomize/rbac/role/base
 	mkdir -p ${CURDIR}/build/kustomize/rbac/rolebinding/base
 	cp -rf ${CURDIR}/rbac/rbac_role.yaml ${CURDIR}/build/kustomize/rbac/role/base
 	cp -rf ${CURDIR}/rbac/rbac_role_binding.yaml ${CURDIR}/build/kustomize/rbac/rolebinding/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctcluster.yaml ${CURDIR}/build/kustomize/crd/unprotected/cluster/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctcluster.yaml ${CURDIR}/build/kustomize/crd/protected/cluster/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctmachine.yaml ${CURDIR}/build/kustomize/crd/unprotected/machine/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctmachine.yaml ${CURDIR}/build/kustomize/crd/protected/machine/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctmachineset.yaml ${CURDIR}/build/kustomize/crd/protected/machineset/base
-	cp -rf ${CURDIR}/crd/cluster_v1alpha1_cnctmachineset.yaml ${CURDIR}/build/kustomize/crd/unprotected/machineset/base
-	cp -rf ${CURDIR}/crd/addons_v1alpha1_appbundle.yaml ${CURDIR}/build/kustomize/crd/unprotected/appbundle/base
-	cp -rf ${CURDIR}/crd/addons_v1alpha1_appbundle.yaml ${CURDIR}/build/kustomize/crd/protected/appbundle/base
-	output=$$(bin/kustomize build build/kustomize/rbac/role); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/RBAC/rbac_role.yaml
-	output=$$(bin/kustomize build build/kustomize/rbac/rolebinding); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/RBAC/rbac_role_binding.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/protected/cluster); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD-protected/cluster_v1alpha1_cnctcluster.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/protected/machine); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD-protected/cluster_v1alpha1_cnctmachine.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/protected/machineset); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD-protected/cluster_v1alpha1_cnctmachineset.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/protected/appbundle); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD-protected/addons_v1alpha1_appbundle.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/unprotected/cluster); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD/cluster_v1alpha1_cnctcluster.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/unprotected/machine); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD/cluster_v1alpha1_cnctmachine.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/unprotected/machineset); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD/cluster_v1alpha1_cnctmachineset.yaml
-	output=$$(bin/kustomize build build/kustomize/crd/unprotected/appbundle); echo "$$output" > ${CURDIR}/deployments/helm/cma-ssh/CRD/addons_v1alpha1_appbundle.yaml
-
+	bin/kustomize build build/kustomize/rbac/role > ${CURDIR}/deployments/helm/cma-ssh/RBAC/rbac_role.yaml
+	bin/kustomize build build/kustomize/rbac/rolebinding > ${CURDIR}/deployments/helm/cma-ssh/RBAC/rbac_role_binding.yaml

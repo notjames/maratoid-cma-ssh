@@ -29,12 +29,6 @@ spec:
           image: "{{ .Values.images.operator.repository }}:{{ .Values.images.operator.tag }}"
           imagePullPolicy: {{ .Values.images.operator.pullPolicy }}
           env:
-            - name: CMA_NEXUS_PROXY_IP
-              value: "{{ .Values.install.airgapProxyIp }}"
-            - name: CMA_BOOTSTRAP_IP
-              value: "{{ .Values.install.bootstrapIp }}"
-            - name: CMA_BOOTSTRAP_PORT
-              value: "{{ .Values.service.bootstrap.nodePort }}"
             - name: MAAS_API_URL
               value: "{{ .Values.maas.apiURL }}"
             - name: MAAS_API_VERSION

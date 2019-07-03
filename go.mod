@@ -74,7 +74,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 	k8s.io/api v0.0.0-20181213150558-05914d821849
-	k8s.io/apiextensions-apiserver v0.0.0-20181213153335-0fe22c71c476 // indirect
+	k8s.io/apiextensions-apiserver v0.0.0-20181213153335-0fe22c71c476
 	k8s.io/apimachinery v0.0.0-20181127025237-2b1284ed4c93
 	k8s.io/client-go v0.0.0-20181213151034-8d9ed539ba31
 	k8s.io/code-generator v0.0.0-20190419212335-ff26e7842f9d

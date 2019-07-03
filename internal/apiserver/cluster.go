@@ -1,12 +1,6 @@
 package apiserver
 
 import (
-	addonsv1alpha1 "github.com/samsung-cnct/cma-ssh/pkg/apis/addons/v1alpha1"
-	"github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/common"
-	v1alpha "github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/v1alpha1"
-	"github.com/samsung-cnct/cma-ssh/pkg/controller/machineset"
-	pb "github.com/samsung-cnct/cma-ssh/pkg/generated/api"
-	"github.com/samsung-cnct/cma-ssh/pkg/util"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,6 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
 	clientlib "sigs.k8s.io/controller-runtime/pkg/client"
+
+	addonsv1alpha1 "github.com/samsung-cnct/cma-ssh/pkg/apis/addons/v1alpha1"
+	"github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/common"
+	v1alpha "github.com/samsung-cnct/cma-ssh/pkg/apis/cluster/v1alpha1"
+	"github.com/samsung-cnct/cma-ssh/pkg/controller/machineset"
+	pb "github.com/samsung-cnct/cma-ssh/pkg/generated/api"
+	"github.com/samsung-cnct/cma-ssh/pkg/util"
 )
 
 func (s *Server) CreateCluster(ctx context.Context, in *pb.CreateClusterMsg) (*pb.CreateClusterReply, error) {
@@ -240,13 +241,13 @@ func (s *Server) GetClusterNodesStatus(ctx context.Context, in *pb.GetClusterNod
 	cluster.Count = int32(len(machineList.Items))
 
 	for _, clusterMachine := range machineList.Items {
-		machine := pb.GetClusterNodesStatusReply_MachineStatus {}
+		machine := pb.GetClusterNodesStatusReply_MachineStatus{}
 
-		machine.MaasSystemId   = clusterMachine.Status.SystemId
-		machine.K8SVersion     = clusterMachine.Status.KubernetesVersion
-		machine.MaasIPAddr     = clusterMachine.Status.SshConfig.Host
-		machine.K8SNodeStatus  = string(clusterMachine.Status.Phase)
-		machine.MaasHostname   = clusterMachine.ObjectMeta.Annotations["maas-hostname"]
+		machine.MaasSystemId = clusterMachine.Status.SystemId
+		machine.K8SVersion = clusterMachine.Status.KubernetesVersion
+		machine.MaasIPAddr = clusterMachine.Status.SshConfig.Host
+		machine.K8SNodeStatus = string(clusterMachine.Status.Phase)
+		machine.MaasHostname = clusterMachine.ObjectMeta.Annotations["maas-hostname"]
 
 		if clusterMachine.Status.SystemId == "" {
 			machine.MaasSystemId = "Waiting for Machine Instantiation..."

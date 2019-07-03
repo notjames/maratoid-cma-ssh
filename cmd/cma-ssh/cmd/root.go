@@ -26,6 +26,12 @@ import (
 	"github.com/soheilhy/cmux"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 	"k8s.io/klog/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -37,6 +43,7 @@ import (
 	"github.com/samsung-cnct/cma-ssh/pkg/apiserver"
 	"github.com/samsung-cnct/cma-ssh/pkg/controller"
 	"github.com/samsung-cnct/cma-ssh/pkg/controller/machine"
+	"github.com/samsung-cnct/cma-ssh/pkg/crd"
 	"github.com/samsung-cnct/cma-ssh/pkg/maas"
 	"github.com/samsung-cnct/cma-ssh/pkg/webhook"
 )
@@ -94,6 +101,11 @@ func operator(cmd *cobra.Command) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		klog.Errorf("unable to set up client config: %q", err)
+		os.Exit(1)
+	}
+
+	if err := installCrdsIfNotFound(cfg); err != nil {
+		klog.Errorf("unable to install crds: %q", err)
 		os.Exit(1)
 	}
 
@@ -187,4 +199,61 @@ func createWebServer(options *apiserver.ServerOptions, manager manager.Manager) 
 	apiServer.AddServersToMux(options)
 
 	return apiServer.GetMux()
+}
+
+func installCrdsIfNotFound(cfg *rest.Config) error {
+	cs, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+	_, err = cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get("cnctclusters.cluster.cnct.sds.samsung.com", v1.GetOptions{})
+	if errors.IsNotFound(err) {
+		if err := createCRD(cs, "/cluster_v1alpha1_cnctcluster.yaml"); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	_, err = cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get("cnctmachines.cluster.cnct.sds.samsung.com", v1.GetOptions{})
+	if errors.IsNotFound(err) {
+		if err := createCRD(cs, "/cluster_v1alpha1_cnctmachine.yaml"); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	_, err = cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get("cnctmachinesets.cluster.cnct.sds.samsung.com", v1.GetOptions{})
+	if errors.IsNotFound(err) {
+		if err := createCRD(cs, "/cluster_v1alpha1_cnctmachineset.yaml"); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	_, err = cs.ApiextensionsV1beta1().CustomResourceDefinitions().Get("appbundles.addons.cnct.sds.samsung.com",
+		v1.GetOptions{})
+	if errors.IsNotFound(err) {
+		if err := createCRD(cs, "/addons_v1alpha1_appbundle.yaml"); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createCRD(cs *clientset.Clientset, file string) error {
+	f, err := crd.Crd.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	dec := yaml.NewYAMLOrJSONDecoder(f, 100)
+	var newCrd v1beta1.CustomResourceDefinition
+	err = dec.Decode(&newCrd)
+	if err != nil {
+		return err
+	}
+	_, err = cs.ApiextensionsV1beta1().CustomResourceDefinitions().Create(&newCrd)
+	return err
 }
