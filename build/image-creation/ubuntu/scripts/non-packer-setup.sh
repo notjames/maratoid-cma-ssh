@@ -96,15 +96,39 @@ get_image()
   done
 }
 
+prep_global_install()
+{
+  cat <<E > "$build_root"/etc/apt/apt.conf.d/99build-system
+DPkg::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };
+APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };
+
+Dir::Cache::pkgcache "";
+Dir::Cache::srcpkgcache;
+E
+
+  cat <<E > "$global_script_fullpath"
+export DEBIAN_FRONTEND=noninteractive 
+apt install -y nfs-common
+apt autoremove
+apt clean
+E
+
+  chown root "$global_script_fullpath"
+  chmod 755 "$global_script_fullpath"
+}
+
 main()
 {
-  [[ -z "$build_root" ]] && return 1
+  [[ -z "$build_root" ]]     && return 1
   [[ "$build_root" == '/' ]] && return 1
-  [[ $USER != "root" ]] && \
+  [[ $USER != "root" ]]      && \
     {
       echo >&2 "Must be root"
       return 1
     }
+
+  global_script="/tmp/global_install.sh"
+  global_script_fullpath="$build_root$global_script"
 
   # prep work area
   rm -rf "$build_root" > /dev/null 2>&1
@@ -133,6 +157,10 @@ main()
 
   chroot "$build_root"/ /tmp/docker-install.sh
   chroot "$build_root"/ /tmp/kubernetes-install.sh
+
+  prep_global_install
+  chroot "$build_root"/ "$global_script"
+
   # maas's preseed curtin_userdata cloud-init uses useradd
   # to add users so set the default shell to /bin/bash instead
   # the default of borne.
