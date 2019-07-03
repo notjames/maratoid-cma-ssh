@@ -96,15 +96,72 @@ get_image()
   done
 }
 
+apt_minimages()
+{
+  echo 'Updating /etc/apt/apt.conf.9/*build-system'
+
+  cat <<E > "$build_root"/etc/apt/apt.conf.d/99build-system
+DPkg::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };
+APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };
+
+Dir::Cache::pkgcache "";
+Dir::Cache::srcpkgcache;
+E
+
+}
+
+init_global_install()
+{
+  local packages
+  packages=(nfs-common)
+
+  cat <<E > "$global_script_fullpath"
+export DEBIAN_FRONTEND=noninteractive
+apt install -y ${packages[@]}
+apt autoremove
+apt clean
+E
+
+  chown root "$global_script_fullpath"
+  chmod 755 "$global_script_fullpath"
+}
+
+fix_useradd()
+{
+  # maas's preseed curtin_userdata cloud-init uses useradd
+  # to add users so set the default shell to /bin/bash instead
+  # the default of borne.
+  echo "Updating /etc/default/useradd"
+  sed -i.bak 's#SHELL=/bin/sh#SHELL=/bin/bash#' "$build_root"/etc/default/useradd
+}
+
+fix_resolvconf()
+{
+  echo "Updating /etc/resolv.conf"
+  mv "$build_root"/etc/resolv.conf.bak "$build_root"/etc/resolv.conf || true
+}
+
+fix_modulesconf()
+{
+  # adds bonding for NIC bonding
+  if ! grep -qP '^bonding$' "$build_root"/etc/modules; then
+    echo 'Updating /etc/modules'
+    echo 'bonding' >> "$build_root"/etc/modules
+  fi
+}
+
 main()
 {
-  [[ -z "$build_root" ]] && return 1
+  [[ -z "$build_root" ]]     && return 1
   [[ "$build_root" == '/' ]] && return 1
-  [[ $USER != "root" ]] && \
+  [[ $USER != "root" ]]      && \
     {
       echo >&2 "Must be root"
       return 1
     }
+
+  global_script="/tmp/global_install.sh"
+  global_script_fullpath="$build_root$global_script"
 
   # prep work area
   rm -rf "$build_root" > /dev/null 2>&1
@@ -114,11 +171,13 @@ main()
   get_image
 
   cp docker-install.sh "$build_root"/tmp/docker-install.sh
-  chown root "$build_root"/tmp/docker-install.sh && chgrp root "$build_root"/tmp/docker-install.sh
+  chown root "$build_root"/tmp/docker-install.sh && \
+    chgrp root "$build_root"/tmp/docker-install.sh
   chmod +x "$build_root"/tmp/docker-install.sh
 
   cp kubernetes-install.sh "$build_root"/tmp/kubernetes-install.sh
-  chown root "$build_root"/tmp/kubernetes-install.sh && chgrp root "$build_root"/tmp/kubernetes-install.sh
+  chown root "$build_root"/tmp/kubernetes-install.sh && \
+    chgrp root "$build_root"/tmp/kubernetes-install.sh
   chmod +x "$build_root"/tmp/kubernetes-install.sh
 
   unsquashfs -f -d "$build_root" "$iso_home/$image_name"
@@ -133,13 +192,22 @@ main()
 
   chroot "$build_root"/ /tmp/docker-install.sh
   chroot "$build_root"/ /tmp/kubernetes-install.sh
-  # maas's preseed curtin_userdata cloud-init uses useradd
-  # to add users so set the default shell to /bin/bash instead
-  # the default of borne.
-  chroot "$build_root"/ /bin/sed -i.bak 's#SHELL=/bin/sh#SHELL=/bin/bash#' /etc/default/useradd
 
-  mv "$build_root"/etc/resolv.conf.bak "$build_root"/etc/resolv.conf || true
+  apt_minimages
 
+  # add package names for installation in all ubuntu distros
+  # to this function
+  init_global_install
+  chroot "$build_root"/ "$global_script"
+
+  # global image changes
+  # these are things that need to be done to all images the
+  # steps of which are the same across distributions.
+  fix_useradd
+  fix_resolvconf
+  fix_modulesconf
+
+  # finish up
   mount_cleanup
   tar cpzf /var/tmp/"$system_name" -C "$build_root" .
 }
