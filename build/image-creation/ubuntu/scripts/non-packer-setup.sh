@@ -96,7 +96,7 @@ get_image()
   done
 }
 
-apt_minimages()
+apt_minify_image()
 {
   echo 'Updating /etc/apt/apt.conf.9/*build-system'
 
@@ -193,7 +193,7 @@ main()
   chroot "$build_root"/ /tmp/docker-install.sh
   chroot "$build_root"/ /tmp/kubernetes-install.sh
 
-  apt_minimages
+  apt_minify_image
 
   # add package names for installation in all ubuntu distros
   # to this function
