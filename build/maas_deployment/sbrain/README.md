@@ -5,7 +5,7 @@ Do the following:
      `/etc/maas/preseeds/`.
 
 Now you just need to edit `curtin_userdata_custom` and
-add the *crypted* password in the REDACTED sectios. That can be
+add the *crypted* password in the REDACTED sections. That can be
 found in 1password or regenerated if so required. Note! The password
 that belongs in the password section IS NOT the plaintext password BUT
 the encrypted password (raw) that goes in the `/etc/shadow` file on the
