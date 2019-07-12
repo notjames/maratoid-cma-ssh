@@ -3,10 +3,29 @@
 
 # What is this?
 
-`cma-ssh` is an operator which manages the lifecycle of Kubernetes clusters
-(i.e. `CnctCluster` resources) and machines (`CnctMachine`).
+`cma-ssh` is a k8s operator which manages the lifecycle of Kubernetes "managed"
+clusters (i.e. `CnctCluster` resources) and machines (`CnctMachine`). Currently,
+this tool instantiates a managed cluster using the MaaS API.
 
-## CMS Developement
+In order for this tool to work, one must manage some pre-requisites first:
+
+1. Set up a bare-metal pool of [MaaS](maas_website) managed servers. This
+project was developed using a lab of NUCs running on maas 2.5. How to set
+up maas is beyond the scope of this documentation. However, the documentation
+on the [MaaS](maas_website) website is comprehensive and simple. NOTE! The
+global [user_data](maas_user_data) configuration outlined in the next step
+MUST be applied before any Kubernetes hosts are instantiated.
+
+1. Before your pool of servers is set up in maas, the maas controller has to have
+some global [user_data](maas_user_data) configuration copied to it for this
+project to properly function; namely swap will become re-enabled on machines
+after a reboot unless you apply this user_data change. Follow the above
+instructions and then move on.
+
+1. Be sure and create a maas API key and know how to obtain for later in this
+document. You can [generate an API Key][generate-an-api-key] using the MAAS GUI.
+
+## cms-ssh usage
 
 ### Building cma-ssh
 
@@ -44,24 +63,26 @@ make clean-test
 The Kubernetes cluster on which the `cma-ssh` is installed must
 have network access to a MAAS server. Within the CNCT lab this
 means you must be in the Seattle office or logged onto the VPN.
-Additionally you will need  to
-[generate an API Key][generate-an-api-key] using the MAAS GUI.
 
-To test `cma-ssh` you can use `kind` and `helm`. For example:
+To test `cma-ssh` you can use `kind` and `helm`. You'll need to
+obtain a copy of your maas apikey. For example:
 
 ```bash
 kind create cluster
-export KUBECONFIG="$(kind get kubeconfig-path --name="kind")"
+export KUBECONFIG="$(kind get kubeconfig-path --name="1")"
 
-kubectl create clusterrolebinding superpowers --clusterrole=cluster-admin --user=system:serviceaccount:kube-system:default
-kubectl create rolebinding superpowers --clusterrole=cluster-admin --user=system:serviceaccount:kube-system:default
+# If you're using helm < 3
+# install helm tiller plugin
+helm tiller install
+helm tiller start-ci
+export HELM_HOST=localhost:44134
+helm install --name cma-ssh deployments/helm/cma-ssh/ --set maas.apiKey=<maas api key>
 
-helm init
+# --OR--
 
-# Set the `maas.apiKey` value for your user.
-vi deployments/helm/cma-ssh/values.yaml
+# if you're using helm >= 3
+helm install cma-ssh deployments/helm/cma-ssh/ --set maas.apiKey=<maas api key>
 
-helm install --name cma-ssh deployments/helm/cma-ssh/
 kubectl get pods --watch
 ```
 
@@ -69,54 +90,47 @@ kubectl get pods --watch
 
 Either kubectl or the Swagger UI REST interface can be used to create Kubernetes clusters with cma-ssh.  This section will focus on using kubectl.
 
-A cluster definition consists of three kinds of Kubernetes Custom Resource Definitions (CRDs):
+A cluster definition consists of two kinds of Kubernetes Custom Resource Definitions (CRDs):
 - [cnctcluster CRD](https://github.com/samsung-cnct/cma-ssh/blob/master/crd/cluster_v1alpha1_cnctcluster.yaml), and
 - [cnctmachine CRD](https://github.com/samsung-cnct/cma-ssh/blob/master/crd/cluster_v1alpha1_cnctmachine.yaml)
-- [cnctmachineset CRD](https://github.com/samsung-cnct/cma-ssh/blob/master/crd/cluster_v1alpha1_cnctmachineset.yaml)
 
 A single cluster definition consists of:
 - one [cnctcluster resource](https://github.com/samsung-cnct/cma-ssh/blob/master/samples/cluster/cluster_v1alpha1_cluster.yaml), and
-- one or more [cnctmachine resources](https://github.com/samsung-cnct/cma-ssh/blob/master/samples/cluster/cluster_v1alpha1_machine.yaml) to define master nodes.
-- one or more [cnctmachineset resources](https://github.com/samsung-cnct/cma-ssh/blob/master/samples/cluster/cluster_v1alpha1_machineset.yaml) to define the worker node pools.
+- one or more [cnctmachine resources](https://github.com/samsung-cnct/cma-ssh/blob/master/samples/cluster/cluster_v1alpha1_machine.yaml) to define master and worker nodes.
 
 ### Namespace per cluster
 
 The resources for a single cluster definition must be in the same namespace.
 You cannot define two clusters in the same namespace, each cluster requires its own namespace.
+One naming option is to use unique cluster names and define a namespace that matches the cluster name.
 
-The code assumes the namespace matches the cluster name.
+### Example using samples for a cluster named cluster1
 
-### Example using samples for a cluster named cluster
-
-Create a namespace for the cluster definition resources (match cluster name):
+Create a namespace for the cluster definition resources:
 
 ```bash
-kubectl create namespace cluster
+kubectl create namespace cluster1
 ```
 
-The cluster manifest defines the kubernetes version and cluster name.
-
-The machine manifest defines the controlplane node(s).
- 
-The machineset manifest defines the worker node pool(s).
-
-Note: The controlplane nodes should not have labels that match the machineset selector labels.
-
-Copy the resource samples to your cluster dir:
+Copy the resource samples to your own cluster dir and modify them:
 
 ```bash
-mkdir ~/cluster
-cp samples/cluster/cluster_v1alpha1_cluster.yaml ~/cluster/cluster.yaml
-cp samples/cluster/cluster_v1alpha1_machine.yaml ~/cluster/machine.yaml
-cp samples/cluster/cluster_v1alpah1_machineset.yaml ~/cluster/machineset.yaml
+mkdir ~/cluster1
+cp samples/cluster/cluster_v1alpha1_cluster.yaml ~/cluster1/cluster.yaml
+cp samples/cluster/cluster_v1alpha1_machine.yaml ~/cluster1/machines.yaml
+
+vi ~/cluster1/cluster.yaml
+#Modify the name, namespace, and optionally kubernetes version
+
+vi ~/cluster1/machines.yaml
+# Modify the name, namespace and instanceType (to match MaaS tags desired)
 ```
 Using kubectl, apply a cluster manifest, and one or more machine manifests to
 create a kubernetes cluster:
 
 ```bash
-kubectl apply -f ~/cluster/cluster.yaml
-kubectl apply -f ~/cluster/machines.yaml
-kubectl apply -f ~/cluster/machineset.yaml
+kubectl apply -f ~/cluster1/cluster.yaml
+kubectl apply -f ~/cluster1/machines.yaml
 ```
 
 ## How instanceType is mapped to MaaS machine tags
@@ -311,3 +325,5 @@ the azure portal or cli
 
 [generate-an-api-key]: https://docs.maas.io/2.1/en/manage-account#api-key
 [packer_tool]: https://packer.io/downloads.html
+[maas_website]: https://maas.io
+[maas_user_data]: https://github.com/notjames/cma-ssh/tree/master/build/maas_deployment
