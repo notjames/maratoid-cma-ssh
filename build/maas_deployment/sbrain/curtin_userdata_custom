@@ -1,0 +1,43 @@
+# cloud-config
+---
+debconf_selections:
+ maas: |
+  {{for line in str(curtin_preseed).splitlines()}}
+  {{line}}
+  {{endfor}}
+
+early_commands:
+ 00_fix_useradd_conf: [sed, '-i.bak', 's#SHELL=/bin/sh#SHELL=/bin/bash#', '/etc/default/useradd']
+
+late_commands:
+ maas: [wget, '--no-proxy', '{{node_disable_pxe_url}}', '--post-data', '{{node_disable_pxe_data}}', '-O', '/dev/null']
+
+# Must be left here so that a swap file
+# is not created on the instance. This also
+# removes the swap line from /etc/fstab
+swap:
+ filename: swap
+ size: 0
+ maxsize: 0
+
+write_files:
+ userconfig:
+  path: /etc/cloud/cloud.cfg.d/98_sbrain_user.cfg
+  content: |
+    ---
+    cloud_final_modules:
+      - [users-groups,always]
+    groups:
+      - docker
+    users:
+      - default
+      - name: sbrain
+        gecos: SBrain Operator
+        primary_group: sbrain
+        groups: [docker,sudo]
+        shell: /bin/bash
+        lock_passwd: false
+        passwd: <REDACTED>
+        ssh_authorized_keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDsemkvbi7T5iDHplm9CSao8FU0RdVrRqDxMP/UCa6A9/JlZ4dbPEf3buPbMfYT//iC0QHOSmmH/aJX0118V2HGihtEBJIGMsm8oCekp9HS3IWQnmUPBCKi8KriVjtersDnQR/nQUKNcz6bTlbZwRjZwUTLTZoqWQCGHDZSs5isQcp90wrRi8YUbUg27X9gPeJ8hLBpE5e0rwpJkq0SdRHbfF4xJJyzmxRZI6lfsxeEyu+NF7TjIJmJNt9M53ver1rRHwMncuIV0BPm/EPWz05HkqTu+KMLMlX1mbZz0I7joMpyfyDyGGEP5qywsbShHbFrlcy7erEVuPMvjLRLZIv5 paul@ub32
+

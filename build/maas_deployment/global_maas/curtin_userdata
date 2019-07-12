@@ -1,0 +1,43 @@
+# cloud-config
+---
+debconf_selections:
+ maas: |
+  {{for line in str(curtin_preseed).splitlines()}}
+  {{line}}
+  {{endfor}}
+
+early_commands:
+ 00_fix_useradd_conf: [sed, '-i.bak', 's#SHELL=/bin/sh#SHELL=/bin/bash#', '/etc/default/useradd']
+
+late_commands:
+ maas: [wget, '--no-proxy', '{{node_disable_pxe_url}}', '--post-data', '{{node_disable_pxe_data}}', '-O', '/dev/null']
+
+# Must be left here so that a swap file
+# is not created on the instance. This also
+# removes the swap line from /etc/fstab
+swap:
+ filename: swap
+ size: 0
+ maxsize: 0
+
+write_files:
+ userconfig:
+  path: /etc/cloud/cloud.cfg.d/98_sbrain_user.cfg
+  content: |
+    ---
+    cloud_final_modules:
+      - [users-groups,always]
+    groups:
+      - docker
+    users:
+      - default
+      - name: maas_user
+        gecos: MaaS Service Operator
+        primary_group: maas_user
+        groups: [docker,sudo]
+        shell: /bin/bash
+        lock_passwd: false
+        passwd: <REDACTED>
+        ssh_authorized_keys:
+          - <service public key>
+
